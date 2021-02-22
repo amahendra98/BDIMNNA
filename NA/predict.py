@@ -165,7 +165,7 @@ def creat_mm_dataset():
     geometry_points = os.path.join('..', 'Simulated_DataSets', 'Meta_material_Neural_Simulator', 'dataIn', 'data_x.csv')
     # Small version is for testing, the large file taks a while to be generated...
     #geometry_points = os.path.join('..', 'Simulated_DataSets', 'Meta_material_Neural_Simulator', 'dataIn', 'data_x_small.csv')
-    Y_filename = geometry_points.replace('data_x', 'data_y')
+    Y_filename = geometry_points.replace('data_x', 'data_y_1')
 
     # Set up the list of prediction files
     pred_list = []
@@ -191,15 +191,18 @@ def creat_mm_dataset():
 
 
 if __name__ == '__main__':
-    # To create Meta-material dataset, use this line 
+    # To create Meta-material dataset, use this line
+    import time
+    s = time.time()
     creat_mm_dataset()
+    print(time.time()-s)
     
    
     # Single evaluation in the data folder of each method
     #method_list = ['Tandem','MDN','INN_FrEIA','cINN','NA','VAE']
     #method_list = ['NA']
     #for method in method_list:
-    #    predict_ensemble_for_all('../Simulated_DataSets/Meta_material_Neural_Simulator/state_dicts/', '../'+ method + '/data/', no_plot=False)  
+    #    predict_ensemble_for_all('../Simulated_DataSets/Meta_material_Neural_Simulator/state_dicts/', '../'+ method + '/data/', no_plot=False)
         
     
     # Multi evaluation in the multi_eval folder of each method

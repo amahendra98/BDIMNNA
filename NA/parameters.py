@@ -19,6 +19,7 @@ USE_LORENTZ = False
 
 # Model Architectural Params for gaussian mixture DataSet
 LINEAR = [4, 500, 500, 500, 500, 1]                 # Dimension of data set cross check with data generator
+BATCH_NORM = True
 CONV_OUT_CHANNEL = []
 CONV_KERNEL_SIZE = []
 CONV_STRIDE = []
@@ -33,6 +34,7 @@ EVAL_STEP = 20
 TRAIN_STEP = 500
 BACKPROP_STEP = 300
 LEARN_RATE = 1e-3
+SCHEDULER = 'reduce-on-plateau'
 # DECAY_STEP = 25000 # This is for step decay, however we are using dynamic decaying
 LR_DECAY_RATE = 0.5
 STOP_THRESHOLD = 1e-5

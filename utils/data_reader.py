@@ -308,6 +308,38 @@ def read_data_ballistics(flags, eval_data_all=False):
         return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_class, test_ratio=0.999)
     return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_class, test_ratio=flags.test_ratio)
 
+def read_data_chen(flags, eval_data_all=False):
+    # Read the data
+    data_dir = os.path.join(flags.data_dir, 'Simulated_DataSets/Chen/')
+    data_x = pd.read_csv(data_dir + 'data_x.csv', header=None).astype('float32').values
+    data_y = pd.read_csv(data_dir + 'data_y.csv', header=None).astype('float32').values
+
+    if eval_data_all:
+        return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_regress, test_ratio=0.999)
+
+    return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_regress, test_ratio=flags.test_ratio)
+
+def read_data_peurifoy(flags, eval_data_all=False):
+    """
+    Data reader function for the gaussian mixture data set
+    :param flags: Input flags
+    :return: train_loader and test_loader in pytorch data set format (normalized)
+    """
+
+    # Read the data
+    data_dir = os.path.join(flags.data_dir, 'Simulated_DataSets/Peurifoy/')
+    data_x = pd.read_csv(data_dir + 'data_x.csv', header=None).astype('float32').values
+    data_y = pd.read_csv(data_dir + 'data_y.csv', header=None).astype('float32').transpose().values
+
+    # Do normalization of data_x as done in peurifoy original source code
+    if flags.normalize_input:
+        data_x = (data_x - data_x.mean(axis=0))/data_x.std(axis=0)
+
+    if eval_data_all:
+        return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_regress, test_ratio=0.999)
+
+    return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_regress, test_ratio=flags.test_ratio)
+
 
 def read_data_gaussian_mixture(flags, eval_data_all=False):
     """
@@ -428,6 +460,10 @@ def read_data(flags, eval_data_all=False):
         train_loader, test_loader = read_data_ballistics(flags,  eval_data_all=eval_data_all)
     elif flags.data_set == 'sine_test_1d':
         train_loader, test_loader = read_data_sine_test_1d(flags, eval_data_all=eval_data_all)
+    elif flags.data_set == 'peurifoy':
+        train_loader, test_loader = read_data_peurifoy(flags,eval_data_all=eval_data_all)
+    elif flags.data_set == 'chen':
+        train_loader, test_loader =read_data_chen(flags,eval_data_all=eval_data_all)
     else:
         sys.exit("Your flags.data_set entry is not correct, check again!")
     return train_loader, test_loader

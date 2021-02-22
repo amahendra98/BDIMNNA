@@ -22,11 +22,26 @@ class NA(nn.Module):
         # Initialize the geometry_eval field
         # self.geometry_eval = torch.randn([flags.eval_batch_size, flags.linear[0]], requires_grad=True)
         # Linear Layer and Batch_norm Layer definitions here
-        self.linears = nn.ModuleList([])
+        self.layers = nn.ModuleList([])
+
+        if flags.batch_norm:
+            for ind, fc_num in enumerate(flags.linear[0:-2]):  # Excluding the last one as we need intervals
+                self.layers.append(nn.Linear(fc_num, flags.linear[ind + 1]))
+                self.layers.append(nn.BatchNorm1d(flags.linear[ind + 1]))
+                self.layers.append(nn.ReLU())
+        else:
+            for ind, fc_num in enumerate(flags.linear[0:-2]):  # Excluding the last one as we need intervals
+                self.layers.append(nn.Linear(fc_num, flags.linear[ind + 1]))
+                self.layers.append(nn.ReLU())
+
+        self.layers.append(nn.Linear(flags.linear[-2],flags.linear[-1]))
+
+        '''self.linears = nn.ModuleList([])
+
         self.bn_linears = nn.ModuleList([])
         for ind, fc_num in enumerate(flags.linear[0:-1]):               # Excluding the last one as we need intervals
             self.linears.append(nn.Linear(fc_num, flags.linear[ind + 1]))
-            self.bn_linears.append(nn.BatchNorm1d(flags.linear[ind + 1]))
+            self.bn_linears.append(nn.BatchNorm1d(flags.linear[ind + 1]))'''
 
         # Conv Layer definitions here
         self.convs = nn.ModuleList([])
@@ -55,11 +70,8 @@ class NA(nn.Module):
         """
         out = G                                                         # initialize the out
         # For the linear part
-        for ind, (fc, bn) in enumerate(zip(self.linears, self.bn_linears)):
-            if ind != len(self.linears) - 1:
-                out = F.relu(bn(fc(out)))                                   # ReLU + BN + Linear
-            else:
-                out = fc(out)                                           # For last layer, no activation function
+        for layer in self.layers:
+            out = layer(out)                                        # For last layer, no activation function
 
         out = out.unsqueeze(1)                                          # Add 1 dimension to get N,L_in, H
         # For the conv part

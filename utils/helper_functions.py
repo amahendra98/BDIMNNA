@@ -16,6 +16,7 @@ import numpy as np
 from Simulated_DataSets.Robotic_Arm.generate_robotic_arm import determine_final_position
 from Simulated_DataSets.Sinusoidal_Wave.generate_Sinusoidal import *
 from Simulated_DataSets.Ballistics.Inverse_ballistics_original import InverseBallisticsModel
+from Simulated_DataSets.Peurifoy.generate_Peurifoy import simulate
 # from ensemble_mm.predict_ensemble import ensemble_predict_master
 # 1
 def get_Xpred(path, name=None):
@@ -229,6 +230,12 @@ def simulator_ballistics(Xpred):
     IB = InverseBallisticsModel()
     return IB.forward_process(Xpred, output_full=True) 
 
+def simulator_peurifoy(Xpred):
+    Ypred = np.empty((Xpred.shape[0], 201))
+    for i in range(len(Xpred)):
+        print("Peurifoy Sim: ", i)
+        Ypred[i] = simulate(Xpred[i])
+    return Ypred
 
 # 14
 """
@@ -266,6 +273,9 @@ def simulator(data_set, Xpred):
         return simulator_robotic(Xpred)
     elif data_set == 'ballistics':
         return simulator_ballistics(Xpred)
+    elif data_set == 'peurifoy':
+        print("Peurifoy sim launched")
+        return simulator_peurifoy(Xpred)
     else:
         sys.exit("In Simulator: Your data_set entry is not correct, check again!")
 

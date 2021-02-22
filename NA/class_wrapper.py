@@ -13,11 +13,13 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 # from torchsummary import summary
 from torch.optim import lr_scheduler
+import shutil
 
 # Libs
 import numpy as np
 from math import inf
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import pandas as pd
 # Own module
 from utils.time_recorder import time_keeper
@@ -36,6 +38,7 @@ class Network(object):
             self.saved_model = saved_model
             print("This is inference mode, the ckpt is", self.ckpt_dir)
         else:                                                   # training mode, create a new ckpt folder
+            print("MODEL NAME: ",flags.model_name)
             if flags.model_name is None:                    # leave custume name if possible
                 self.ckpt_dir = os.path.join(ckpt_dir, time.strftime('%Y%m%d_%H%M%S', time.localtime()))
             else:
@@ -48,6 +51,7 @@ class Network(object):
         self.train_loader = train_loader                        # The train data loader
         self.test_loader = test_loader                          # The test data loader
         self.log = SummaryWriter(self.ckpt_dir)                 # Create a summary writer for keeping the summary to the tensor board
+        #self.log = SummaryWriter("models/"+self.flags.eval_model) #Used in eval_batch sweeping
         self.best_validation_loss = float('inf')                # Set the BVL to large number
 
     def make_optimizer_eval(self, geometry_eval, optimizer_type=None):
@@ -124,14 +128,17 @@ class Network(object):
         return op
 
     def make_lr_scheduler(self, optm):
-        """
-        Make the learning rate scheduler as instructed. More modes can be added to this, current supported ones:
-        1. ReduceLROnPlateau (decrease lr when validation error stops improving
-        :return:
-        """
-        return lr_scheduler.ReduceLROnPlateau(optimizer=optm, mode='min',
-                                              factor=self.flags.lr_decay_rate,
-                                              patience=10, verbose=True, threshold=1e-4)
+        if self.flags.scheduler == 'reduce-on-plateau':
+            scheduler = lr_scheduler.ReduceLROnPlateau(optimizer=optm, mode='min',
+                                                  factor=self.flags.lr_decay_rate,
+                                                  patience=10, verbose=True, threshold=1e-4)
+        elif self.flags.scheduler == 'exponential':
+            scheduler = lr_scheduler.ExponentialLR(optimizer=optm,gamma=self.flags.lr_decay_rate)
+        else:
+            raise Exception("Learning Rate Scheduler flag improperly configured")
+
+        return scheduler
+
 
     def save(self):
         """
@@ -194,13 +201,33 @@ class Network(object):
                 self.model.eval()
                 print("Doing Evaluation on the model now")
                 test_loss = 0
-                for j, (geometry, spectra) in enumerate(self.test_loader):  # Loop through the eval set
-                    if cuda:
-                        geometry = geometry.cuda()
-                        spectra = spectra.cuda()
-                    logit = self.model(geometry)
-                    loss = self.make_loss(logit, spectra)                   # compute the loss
-                    test_loss += loss                                       # Aggregate the loss
+                if epoch < self.flags.train_step-1:
+                    for j, (geometry, spectra) in enumerate(self.test_loader):  # Loop through the eval set
+                        if cuda:
+                            geometry = geometry.cuda()
+                            spectra = spectra.cuda()
+
+                        logit = self.model(geometry)
+                        loss = self.make_loss(logit, spectra)  # compute the loss
+                        test_loss += loss  # Aggregate the loss
+
+                else:
+                    with open(os.path.join(self.ckpt_dir, 'test_Ypred.txt'), 'a') as fyp, \
+                            open(os.path.join(self.ckpt_dir, 'test_Ytruth.txt'), 'a') as fyt, \
+                            open(os.path.join(self.ckpt_dir, 'test_Xtruth.txt'), 'a') as fxt:
+
+                        for j, (geometry, spectra) in enumerate(self.test_loader):  # Loop through the eval set
+                            np.savetxt(fxt, geometry.data.numpy())
+                            np.savetxt(fyt, spectra.data.numpy())
+                            if cuda:
+                                geometry = geometry.cuda()
+                                spectra = spectra.cuda()
+
+                            logit = self.model(geometry)
+                            loss = self.make_loss(logit, spectra)  # compute the loss
+
+                            np.savetxt(fyp, logit.cpu().data.numpy())
+                            test_loss += loss  # Aggregate the loss
 
                 # Record the testing loss to the tensorboard
                 test_avg_loss = test_loss.cpu().data.numpy() / (j+1)
@@ -248,6 +275,7 @@ class Network(object):
             self.model.cuda()
         self.model.eval()
         saved_model_str = self.saved_model.replace('/','_')
+        #saved_model_str = self.flags.eval_model
         # Get the file names
         Ypred_file = os.path.join(save_dir, 'test_Ypred_{}.csv'.format(saved_model_str))
         Xtruth_file = os.path.join(save_dir, 'test_Xtruth_{}.csv'.format(saved_model_str))
@@ -255,14 +283,16 @@ class Network(object):
         Xpred_file = os.path.join(save_dir, 'test_Xpred_{}.csv'.format(saved_model_str))
         print("evalution output pattern:", Ypred_file)
 
-        # Time keeping
+        # Logging
         tk = time_keeper(time_keeping_file=os.path.join(save_dir, 'evaluation_time.txt'))
+        min_mse_hist = np.empty(len(self.test_loader))
 
         # Open those files to append
         with open(Xtruth_file, 'a') as fxt,open(Ytruth_file, 'a') as fyt,\
                 open(Ypred_file, 'a') as fyp, open(Xpred_file, 'a') as fxp:
             # Loop through the eval data and evaluate
             for ind, (geometry, spectra) in enumerate(self.test_loader):
+                print("Sample #:\t", ind, " / ", len(self.test_loader))
                 if cuda:
                     geometry = geometry.cuda()
                     spectra = spectra.cuda()
@@ -270,16 +300,38 @@ class Network(object):
                 Xpred, Ypred, loss = self.evaluate_one(spectra, save_dir=save_dir, save_all=save_all, ind=ind,
                                                         MSE_Simulator=MSE_Simulator, save_misc=save_misc, save_Simulator_Ypred=save_Simulator_Ypred)
                 tk.record(ind)                          # Keep the time after each evaluation for backprop
-                # self.plot_histogram(loss, ind)                                # Debugging purposes
+
                 if save_misc:
                     np.savetxt('visualize_final/point{}_Xtruth.csv'.format(ind), geometry.cpu().data.numpy())
                     np.savetxt('visualize_final/point{}_Ytruth.csv'.format(ind), spectra.cpu().data.numpy())
                 # suppress printing to evaluate time
-                np.savetxt(fxt, geometry.cpu().data.numpy())
-                np.savetxt(fyt, spectra.cpu().data.numpy())
+                geo = geometry.cpu().data.numpy()
+                spec = spectra.cpu().data.numpy()
+                np.savetxt(fxt, geo)
+                np.savetxt(fyt, spec)
                 if self.flags.data_set != 'meta_material':
                     np.savetxt(fyp, Ypred)
                 np.savetxt(fxp, Xpred)
+
+                min_mse = np.min(loss)
+
+                # Logging
+                self.log.add_scalar('NA/avg_mse', np.mean(loss), ind)
+                self.log.add_scalar('NA/min_mse', min_mse, ind)
+
+        '''
+        f = plt.figure()
+        for i,c in enumerate([0.2,0.5,0.8]):
+            plt.plot(range(len(spec[0])),worst_samples['truth_spect'][i], '-.',color=c)
+            plt.plot(range(len(spec[0])),worst_samples['pred_spect'][i], '-',color=c,
+                     label=np.round(worst_samples['mse'][i],6))
+        plt.xlabel("Wavelength")
+        plt.ylabel("Spectra")
+        plt.legend(loc="upper left")
+        plt.suptitle("3 Random Spectral Fits")
+        plt.savefig(os.path.join('data','misc_fits_{}.png'.format(saved_model_str)))
+        '''
+
         return Ypred_file, Ytruth_file
 
     def evaluate_one(self, target_spectra, save_dir='data/', MSE_Simulator=False ,save_all=False, ind=None, save_misc=False, save_Simulator_Ypred=False):
@@ -368,7 +420,6 @@ class Network(object):
             if len(np.shape(Ypred)) == 1:           # If this is the ballistics dataset where it only has 1d y'
                 Ypred = np.reshape(Ypred, [-1, 1])
         Ypred_best = np.reshape(np.copy(Ypred[best_estimate_index, :]), [1, -1])
-
         return Xpred_best, Ypred_best, MSE_list
 
 
@@ -427,9 +478,24 @@ class Network(object):
             return np.array([2, 2, 1.099, 1]), np.array([-1, 0.5, 0.157, 0.46]), np.array([1, 2.5, 1.256, 1.46])
         elif self.flags.data_set == 'robotic_arm':
             return np.array([1.2, 2.4, 2.4, 2.4]), np.array([-0.6, -1.2, -1.2, -1.2]), np.array([0.6, 1.2, 1.2, 1.2])
+        elif self.flags.data_set == 'peurifoy':
+            return np.ones(8)*3.5, -np.ones(8)*1.75, np.ones(8)*1.75 #These are accurate to 0.03 - if problems arise consider that
+        elif self.flags.data_set == 'chen':
+            return np.ones(5)*45,np.ones(5)*5,np.ones(5)*50
         else:
             sys.exit("In NA, during initialization from uniform to dataset distrib: Your data_set entry is not correct, check again!")
 
+    def plot_histogram(self, loss, name):
+        """
+        Plot the loss histogram to see the loss distribution
+        """
+        f = plt.figure()
+        plt.hist(loss, bins=100)
+        plt.xlabel('MSE loss')
+        plt.ylabel('cnt')
+        plt.suptitle('(Avg Expected MSE={:4e})'.format(np.mean(loss)))
+        plt.savefig(os.path.join('data','best_loss_{}.png'.format(name)))
+        return None
 
     def predict(self, Xpred_file, no_save=False, load_state_dict=None):
         """
@@ -468,15 +534,3 @@ class Network(object):
         np.savetxt(Ypred_file, Ypred.cpu().data.numpy())
 
         return Ypred_file, Ytruth_file
-
-    def plot_histogram(self, loss, ind):
-        """
-        Plot the loss histogram to see the loss distribution
-        """
-        f = plt.figure()
-        plt.hist(loss, bins=100)
-        plt.xlabel('MSE loss')
-        plt.ylabel('cnt')
-        plt.suptitle('(Avg MSE={:4e})'.format(np.mean(loss)))
-        plt.savefig(os.path.join('data','loss{}.png'.format(ind)))
-        return None

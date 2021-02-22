@@ -27,6 +27,7 @@ def read_flag():
     parser.add_argument('--conv-out-channel', type=list, default=CONV_OUT_CHANNEL, help='The output channel of your 1d conv')
     parser.add_argument('--conv-kernel-size', type=list, default=CONV_KERNEL_SIZE, help='The kernel size of your 1d conv')
     parser.add_argument('--conv-stride', type=list, default=CONV_STRIDE, help='The strides of your 1d conv')
+    parser.add_argument('--batch-norm', type=bool, default=BATCH_NORM, help='Use Batch Normalization Layers')
 
     # Optimizer Params
     parser.add_argument('--optim', default=OPTIM, type=str, help='the type of optimizer that you want to use')
@@ -42,6 +43,8 @@ def read_flag():
                         help='decay learn rate by multiplying this factor')
     parser.add_argument('--stop_threshold', default=STOP_THRESHOLD, type=float,
                         help='The threshold below which training should stop')
+    parser.add_argument('--scheduler',default=SCHEDULER,type=str,help='Determines type of scheduler used options are '
+                                                                      '\'reduce-on-plateau\' or \'exponential')
     #    parser.add_argument('--decay-step', default=DECAY_STEP, type=int,
     #                        help='decay learning rate at this number of steps')
 

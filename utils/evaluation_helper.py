@@ -2,6 +2,7 @@
 This is the helper functions for evaluation purposes
 
 """
+import random
 import numpy as np
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
@@ -58,19 +59,71 @@ def compare_truth_pred(pred_file, truth_file, cut_off_outlier_thres=None, quiet_
         # This is for the edge case of ballistic, where y value is 1 dimensional which cause dimension problem
         pred = np.reshape(pred, [-1,1])
         truth = np.reshape(truth, [-1,1])
+    mre = np.mean(np.abs((pred-truth)/truth), axis=1)
     mae = np.mean(np.abs(pred-truth), axis=1)
     mse = np.mean(np.square(pred-truth), axis=1)
 
     if cut_off_outlier_thres is not None:
+        mre = mre[mre < cut_off_outlier_thres]
         mse = mse[mse < cut_off_outlier_thres]
         mae = mae[mae < cut_off_outlier_thres]
 
-        
-    return mae, mse
+    return mae, mre, mse
 
+def sampleSpectra(n,targets, pred_file, truth_file, MRE=False, MAE=False, quantiles=True):
+    if isinstance(pred_file, str):      # If input is a file name (original set up)
+        pred = np.loadtxt(pred_file, delimiter=' ')
+        truth = np.loadtxt(truth_file, delimiter=' ')
+    elif isinstance(pred_file, np.ndarray):
+        pred = pred_file
+        truth = truth_file
+    else:
+        raise Exception('In the findSpectra function, your input pred and truth is neither a file nor a numpy array')
 
-def plotMSELossDistrib(pred_file, truth_file, flags, save_dir='data/'):
-    if (flags.data_set == 'gaussian_mixture'):
+    mae,mre,mse = compare_truth_pred(pred,truth)
+
+    if MRE:
+        # search by MRE
+        sequence = mre
+    elif MAE:
+        # search by MAE
+        sequence = mae
+    else:
+        # search by MSE default
+        sequence = mse
+
+    # Targets are quantile values
+    quant_vals = targets
+    if quantiles:
+        quant_vals = [np.quantile(sequence, q) for q in targets]
+
+    ret_list = []
+
+    for q,trgt in zip(quant_vals,targets):
+        distance = np.abs(sequence-q)
+        sorter = np.argsort(np.argsort(distance))
+        idcs = np.argwhere(sorter < n)
+        ret_list.append({'target':trgt,'idxs':np.reshape(idcs,n),'mse':np.reshape(mse[idcs],n),
+                         'mre':np.reshape(mre[idcs],n),'mae':np.reshape(mae[idcs],n),'pred': np.squeeze(pred[idcs,:]),
+                         'truth':np.squeeze(truth[idcs,:])})
+    return ret_list
+
+def plotSpectra(x_range,pred_spec,truth_spec,labels, title,save_str='data/temp'):
+    f = plt.figure()
+    colors = ['c','g','y','r','k','m','b']
+    random.shuffle(colors)
+    for pred,truth,label in iter(zip(pred_spec,truth_spec,labels)):
+        c = colors.pop()
+        plt.plot(x_range, truth, '-.' + c)
+        plt.plot(x_range, pred, '-' + c, label=label)
+    plt.xlabel("Wavelength")
+    plt.ylabel("Spectra")
+    plt.legend(loc="upper left")
+    plt.suptitle(title)
+    plt.savefig('{}.png'.format(save_str))
+
+def plotMSELossDistrib(pred_file, truth_file, flags, save_dir='data/',quantiles=None):
+    if (flags.data_set == 'gaussian_mixture'): #data_set
         # get the prediction and truth array
         pred = np.loadtxt(pred_file, delimiter=' ')
         truth = np.loadtxt(truth_file, delimiter=' ')
@@ -87,20 +140,64 @@ def plotMSELossDistrib(pred_file, truth_file, flags, save_dir='data/'):
         plt.title('accuracy = {}'.format(accuracy))
         sns.set(font_scale=1.4)
         sns.heatmap(cm, annot=True)
-        eval_model_str = flags.eval_model.replace('/','_')
+        eval_model_str = flags.eval_model.replace('/','_') #eval_model
         f.savefig(save_dir + '{}.png'.format(eval_model_str),annot_kws={"size": 16})
 
     else:
-        mae, mse = compare_truth_pred(pred_file, truth_file)
+        mae, mre, mse = compare_truth_pred(pred_file, truth_file)
         plt.figure(figsize=(12, 6))
-        plt.hist(mse, bins=100)
+        y,x,_ = plt.hist(mse, bins=100)
         plt.xlabel('Mean Squared Error')
         plt.ylabel('cnt')
-        plt.suptitle('(Avg MSE={:.4e})'.format(np.mean(mse)))
+        plt.suptitle('(Avg MSE={:.4e}, Avg MRE={:.4%})'.format(np.mean(mse),np.mean(mre)))
         eval_model_str = flags.eval_model.replace('/','_')
-        plt.savefig(os.path.join(save_dir,
-                             '{}.png'.format(eval_model_str)))
-        print('(Avg MSE={:.4e})'.format(np.mean(mse)))
+
+        if quantiles:
+            qts = [np.quantile(mse, q) for q in quantiles]
+            for i in range(5):
+                plt.axvline(qts[i], ymax = y.max(), linestyle = ":")
+                plt.text(qts[i],y.max()*(10-i)/10,"{}th".format(quantiles[i]*100),fontsize=12)
+
+        plt.savefig(os.path.join(save_dir,'{}.png'.format(eval_model_str)))
+        print('(Avg MSE={:.4e}, Avg MRE={:.4%})'.format(np.mean(mse),np.mean(mre)))
+
+def makePlots(pred_file,truth_file,flags,save_dir='data/',quantiles=None):
+    # Create the histogram
+    plotMSELossDistrib(pred_file,truth_file,flags,save_dir=save_dir,quantiles=quantiles)
+
+    # Sample desired spectra from list
+    samples = sampleSpectra(3,quantiles,pred_file,truth_file,quantiles=True)
+
+    if flags.data_set == "peurifoy":
+        x_range = np.linspace(400,800,len(samples[0]['pred'][0]))
+    elif flags.data_set == "chen":
+        x_range = np.linspace(240,2000,len(samples[0]['pred'][0]))
+    elif flags.data_set == "sine_wave":
+        x_range = np.linspace(0,1,len(samples[0]['pred'][0]))
+    elif flags.data_set == "meta_material":
+        x_range = np.linspace(0.5,2,len(samples[0]['pred'][0]))
+    elif flags.data_set == "ballistics":
+        x_range = np.linspace(0,1,len(samples[0]['pred'][0]))
+    elif flags.data_set == "robotic_arm":
+        x_range = np.linspace(0,1,len(samples[0]['pred'][0]))
+    else:
+        raise Exception("Conigure data_set option in flags object")
+
+    # Create plots
+    for i,plot in enumerate(samples):
+        label = []
+        for j in range(len(plot['idxs'])):
+            label.append('MSE: {}, MRE: {}'.format(format(plot['mse'][j],'.4g'), format(plot['mre'][j],'.2%')))
+
+        if quantiles:
+            title = "Spectral fits at {}th quantile".format(int(100*plot['target']))
+            save = os.path.join(save_dir,flags.eval_model+'_'+str(int(100*plot['target']))+'th')
+        else:
+            title = "Spectral fits at {} value".format(plot['target'])
+            save = os.path.join(save_dir, flags.eval_model+'_val'+str(plot['target']))
+
+        plotSpectra(x_range,plot['pred'],plot['truth'],label,title,save_str=save)
+
 
 
 def eval_from_simulator(Xpred_file, flags):

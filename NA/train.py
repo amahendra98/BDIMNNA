@@ -6,7 +6,8 @@ import glob
 import os
 import shutil
 import sys
-sys.path.append('../utils/')
+sys.path.append('C:\\Users\\Lab User\\Desktop\\Ashwin\\BDIMNNA')
+sys.path.append('C:\\Users\\Lab User\\Desktop\\Ashwin\\BDIMNNA\\utils')
 
 # Torch
 
@@ -43,8 +44,8 @@ def retrain_different_dataset(index):
      This function is to evaluate all different datasets in the model with one function call
      """
      from utils.helper_functions import load_flags
-     #data_set_list = ["meta_material"]
-     data_set_list = ["meta_material","robotic_arm","sine_wave","ballistics"]
+     #data_set_list = ["peurifoy"]
+     data_set_list = ["meta_material","robotic_arm","sine_wave","ballistics","peurifoy","chen"]
      for eval_model in data_set_list:
         flags = load_flags(os.path.join("models", eval_model))
         flags.model_name = "retrain" + str(index) + eval_model
@@ -59,6 +60,8 @@ if __name__ == '__main__':
     flags = flag_reader.read_flag()
 
     # Do the retraining for all the data set to get the training 
-    for i in range(10):
+    for i in range(3,10):
         retrain_different_dataset(i)
 
+# Train peurifoy at index 2
+# Resume training all from index 3

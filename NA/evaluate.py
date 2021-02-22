@@ -4,7 +4,8 @@ This file serves as a evaluation interface for the network
 # Built in
 import os
 import sys
-sys.path.append('../utils/')
+sys.path.append('C:\\Users\\Lab User\\Desktop\\Ashwin\\BDIMNNA')
+sys.path.append('C:\\Users\\Lab User\\Desktop\\Ashwin\\BDIMNNA\\utils')
 # Torch
 
 # Own
@@ -13,16 +14,15 @@ from class_wrapper import Network
 from model_maker import NA
 from utils import data_reader
 from utils.helper_functions import load_flags
-from utils.evaluation_helper import plotMSELossDistrib
+from utils.evaluation_helper import plotMSELossDistrib, makePlots
 from utils.evaluation_helper import get_test_ratio_helper
 # Libs
 import numpy as np
 import matplotlib.pyplot as plt
-from thop import profile, clever_format
+#from thop import profile, clever_format
 
 
 def evaluate_from_model(model_dir, multi_flag=False, eval_data_all=False, save_misc=False, MSE_Simulator=False, save_Simulator_Ypred=True):
-
     """
     Evaluating interface. 1. Retreive the flags 2. get data 3. initialize network 4. eval
     :param model_dir: The folder to retrieve the model
@@ -45,8 +45,9 @@ def evaluate_from_model(model_dir, multi_flag=False, eval_data_all=False, save_m
         save_Simulator_Ypred = False
         print("this is MM dataset, setting the save_Simulator_Ypred to False")
     flags.batch_size = 1                            # For backprop eval mode, batchsize is always 1
-    flags.lr = 0.5
-    flags.eval_batch_size = eval_flags.eval_batch_size
+    if flags.data_set == 'chen': flags.lr = 0.01
+    else: flags.lr = 0.5
+
     flags.train_step = eval_flags.train_step
 
     print(flags)
@@ -71,7 +72,7 @@ def evaluate_from_model(model_dir, multi_flag=False, eval_data_all=False, save_m
         pred_file, truth_file = ntwk.evaluate(save_misc=save_misc, MSE_Simulator=MSE_Simulator, save_Simulator_Ypred=save_Simulator_Ypred)
 
     # Plot the MSE distribution
-    plotMSELossDistrib(pred_file, truth_file, flags)
+    makePlots(pred_file, truth_file, flags, quantiles=[0.05,0.25,0.5,0.75,0.95])
     print("Evaluation finished")
 
 
@@ -89,12 +90,13 @@ def evaluate_different_dataset(multi_flag, eval_data_all, save_Simulator_Ypred=F
      """
      This function is to evaluate all different datasets in the model with one function call
      """
-     data_set_list = ["robotic_arm","sine_wave","ballistics","meta_material"]
+     data_set_list = ['peurifoy','meta_material','chen',"robotic_arm","sine_wave","ballistics"]
      for eval_model in data_set_list:
         for j in range(10):
             useless_flags = flag_reader.read_flag()
             useless_flags.eval_model = "retrain" + str(j) + eval_model
-            evaluate_from_model(useless_flags.eval_model, multi_flag=multi_flag, eval_data_all=eval_data_all, save_Simulator_Ypred=save_Simulator_Ypred, MSE_Simulator=MSE_Simulator)
+            evaluate_from_model(useless_flags.eval_model, multi_flag=multi_flag, eval_data_all=eval_data_all,
+                                save_Simulator_Ypred=save_Simulator_Ypred, MSE_Simulator=MSE_Simulator)
 
 
 if __name__ == '__main__':
@@ -105,6 +107,8 @@ if __name__ == '__main__':
     # different dataset #
     #####################
     # This is to run the single evaluation, please run this first to make sure the current model is well-trained before going to the multiple evaluation code below
-    evaluate_different_dataset(multi_flag=False, eval_data_all=False, save_Simulator_Ypred=True, MSE_Simulator=False)
+    evaluate_different_dataset(multi_flag=False, eval_data_all=False, save_Simulator_Ypred=False, MSE_Simulator=False)
+    # A.M. modified save_Simulator_Ypred to False from True
+
     # This is for multi evaluation for generating the Fig 3, evaluating the models under various T values
     #evaluate_different_dataset(multi_flag=True, eval_data_all=False, save_Simulator_Ypred=True, MSE_Simulator=False)
