@@ -314,6 +314,10 @@ def read_data_chen(flags, eval_data_all=False):
     data_x = pd.read_csv(data_dir + 'data_x.csv', header=None).astype('float32').values
     data_y = pd.read_csv(data_dir + 'data_y.csv', header=None).astype('float32').values
 
+    # Do normalization of data_x
+    if flags.normalize_input:
+        data_x = np.normalize_np(data_x)
+
     if eval_data_all:
         return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_regress, test_ratio=0.999)
 
@@ -331,9 +335,9 @@ def read_data_peurifoy(flags, eval_data_all=False):
     data_x = pd.read_csv(data_dir + 'data_x.csv', header=None).astype('float32').values
     data_y = pd.read_csv(data_dir + 'data_y.csv', header=None).astype('float32').transpose().values
 
-    # Do normalization of data_x as done in peurifoy original source code
+    # Do normalization of data_x
     if flags.normalize_input:
-        data_x = (data_x - data_x.mean(axis=0))/data_x.std(axis=0)
+        data_x = np.normalize_np(data_x)
 
     if eval_data_all:
         return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_regress, test_ratio=0.999)
