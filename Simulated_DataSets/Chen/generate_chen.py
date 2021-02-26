@@ -532,6 +532,6 @@ def generate(ndata):
 if __name__ == '__main__':
     isTestLiteMORT = False
     isInverse = True
-    ndata = 500
+    ndata = 50000
 
     generate(ndata)
