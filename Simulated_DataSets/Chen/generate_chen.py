@@ -120,7 +120,7 @@ class DefaultConfig(object):
 class N_Dict(object):
     map2 = {}
 
-    def __init__(self,config):
+    def __init__(self,config=None):
         self.dicts = {}
         self.config = config
         return
@@ -146,7 +146,7 @@ class N_Dict(object):
         if material == "air":
             return n
         if material == "Si3N4":
-            if self.config.model=='v1':
+            if self.config is None or self.config.model=='v1':
                 return 2. + 0j
             else:
                 return 2.46 + 0j
@@ -493,17 +493,62 @@ def jreftran_rt(wavelength, d, n, t0, polarization,M=None,M_t=None):
     # return r,t,R,T,A,Y_tot,eta_one,fx,Re,Im
     return r, t, R, T, A
 
-def simulate(config, n_dict, x):
-    config = GraSi3N4_init(2018,'v1')
-    nLayer = config.nLayer
+def simulate(Xpred):
+    ' Generates y from x data '
+    lambda_0 = 240
+    lambda_f = 2000
+    n_spct = 256
 
-    n_dict = N_Dict(config)
-    n_dict.Load("Si3N4", "./data/Si3N4_310nm-14280nm.txt", scale=1000);
-    n_dict.Load("Graphene", "./data/Graphene_240nm-30000nm.txt");
-    n_dict.InitMap2(["Si3N4", "Graphene"], config.lenda_tic)
+    cheb_plot = cheb.chebpts2(n_spct)
+    scale = (lambda_f - lambda_0) / 2
+    offset = lambda_0 + scale
+    scaled_cheb = [i * scale + offset for i in cheb_plot]
 
-    sKeyTitle = None
-    pathZ = GraSi3N4_sample(ndata, 42, sKeyTitle, config, n_dict)
+    # Load refractive indices of materials at different sizes
+    n_dict = N_Dict()
+    n_dict.Load("Si3N4", "./Si3N4_310nm-14280nm.txt", scale=1000)
+    n_dict.Load("Graphene", "./Graphene_240nm-30000nm.txt")
+    n_dict.InitMap2(["Si3N4", "Graphene"], scaled_cheb)
+    map2 = n_dict.map2
+
+    Ypred = np.zeros((Xpred.shape[0], n_spct))
+
+    for c, x in enumerate(Xpred):
+        dataY = np.zeros((n_spct, 3))
+
+        t_layers = np.array([])
+        for val in x:
+            # Graphene is preset to always be 0.35 thick
+            t_layers = np.concatenate((t_layers, np.array([0.35, val])))
+        t_layers = np.concatenate((np.array([np.nan]),t_layers, np.array([np.nan])))
+
+        # Each y-point has different ns in each layer
+        for row, lenda in enumerate(scaled_cheb):
+            n_layers = np.array([])
+            for i in range(len(t_layers) - 2):
+                # -2 added to subtract added substrate parameters from length
+                if i % 2 == 0:
+                    n_layers = np.concatenate((n_layers, np.array([map2['Graphene', lenda]])))
+                else:
+                    n_layers = np.concatenate((n_layers, np.array([map2['Si3N4', lenda]])))
+            # Sandwich by substrate
+            n_layers = np.concatenate((np.array([1.46 + 0j]), n_layers, np.array([1 + 0j])))
+
+            # TARGET PARAMETERS OF THE PROBLEM!
+            xita = 0
+            polar = 0
+
+            r, t, R, T, A = jreftran_rt(lenda, t_layers, n_layers, xita, polar)
+
+            dataY[row, 0] = R
+            dataY[row, 1] = T
+            dataY[row, 2] = A
+
+        # Because graphs are of absorbance 2nd value is selected
+        Ypred[c, :] = dataY[0:n_spct, 2]
+
+    return Ypred
+
 
 def generate(ndata):
     config = GraSi3N4_init(2018,'v1')
@@ -525,8 +570,9 @@ def generate(ndata):
     nPt = (int)(mX.shape[0] / ndata)
     assert nPt == 256
 
-    X_Curve_Y_thicks(config, mX, mY, nPt)
+    x,y = X_Curve_Y_thicks(config, mX, mY, nPt)
     os.remove(pathZ)
+    return x,y
 
 
 if __name__ == '__main__':
