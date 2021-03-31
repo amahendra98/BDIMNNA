@@ -359,6 +359,7 @@ class Network(object):
 
         # Begin NA
         for i in range(self.flags.backprop_step):
+            print(i)
             # Make the initialization from [-1, 1], can only be in loop due to gradient calculator constraint
             geometry_eval_input = self.initialize_from_uniform_to_dataset_distrib(geometry_eval)
             if save_misc and ind == 0 and i == 0:                       # save the modified initial guess to verify distribution

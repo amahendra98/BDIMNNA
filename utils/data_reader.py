@@ -316,7 +316,7 @@ def read_data_chen(flags, eval_data_all=False):
 
     # Do normalization of data_x
     if flags.normalize_input:
-        data_x = np.normalize_np(data_x)
+        data_x = normalize_np(data_x)
 
     if eval_data_all:
         return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_regress, test_ratio=0.999)
@@ -337,7 +337,7 @@ def read_data_peurifoy(flags, eval_data_all=False):
 
     # Do normalization of data_x
     if flags.normalize_input:
-        data_x = np.normalize_np(data_x)
+        data_x = normalize_np(data_x)
 
     if eval_data_all:
         return get_data_into_loaders(data_x, data_y, flags.batch_size, SimulatedDataSet_regress, test_ratio=0.999)

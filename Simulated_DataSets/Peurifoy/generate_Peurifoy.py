@@ -158,9 +158,9 @@ if __name__ == '__main__':
     low_bound = 30
     up_bound = 70
     num_layers = 3
-    num_samples = 2048
+    num_samples = 300
 
     data_x, data_y = generate(low_bound,up_bound,num_samples,num_layers)
-    np.savetxt("data_x.csv",data_x,delimiter=',')
-    np.savetxt("data_y.csv",data_y,delimiter=',')
-    print(time.time()-start)
+    print(time.time() - start)
+    np.savetxt("data_x1.csv",data_x,delimiter=',')
+    np.savetxt("data_y1.csv",data_y,delimiter=',')
